@@ -32,12 +32,15 @@ function compare(operator, value, threshold) {
 export function evaluateRecord(record, rulesConfig) {
   const warnings = [];
   const missing = rulesConfig.required_fields.filter((f) => !record[f]);
+  const missingRecommended = rulesConfig.recommended_fields.filter((f) => !record[f]);
   if (missing.length) {
     return {
       triage_status: 'Fail/hold',
       confidence: 'low',
       short_explanation: `Record is missing required field(s): ${missing.join(', ')}.`,
       reasons_triggered: ['missing_required_fields'],
+      missing_required_fields: missing,
+      missing_recommended_fields: missingRecommended,
       warnings,
       suggested_action: 'Complete required fields and re-run triage.',
       rationale: 'Hard fail because required data for triage was not provided.'
@@ -50,6 +53,8 @@ export function evaluateRecord(record, rulesConfig) {
       confidence: 'low',
       short_explanation: '0–1000 bp percentage is out of valid range (0–100).',
       reasons_triggered: ['invalid_percent_range'],
+      missing_required_fields: missing,
+      missing_recommended_fields: missingRecommended,
       warnings,
       suggested_action: 'Correct invalid value and re-run triage.',
       rationale: 'Hard fail due to impossible percentage value.'
@@ -64,7 +69,6 @@ export function evaluateRecord(record, rulesConfig) {
     highest = Math.max(highest, severityRank[rule.severity] || 0);
   });
 
-  const missingRecommended = rulesConfig.recommended_fields.filter((f) => !record[f]);
   let confidence = 'high';
   if (missingRecommended.length >= 1) confidence = 'medium';
   if (missingRecommended.length >= 2) confidence = 'low';
@@ -75,6 +79,8 @@ export function evaluateRecord(record, rulesConfig) {
       confidence,
       short_explanation: 'No caution/review/high-risk thresholds were triggered for this stage.',
       reasons_triggered: [],
+      missing_required_fields: missing,
+      missing_recommended_fields: missingRecommended,
       warnings,
       suggested_action: 'Proceed per SOP; continue routine QC checks.',
       rationale: `Stage ${record.stage}: all configured thresholds passed.`
@@ -90,6 +96,8 @@ export function evaluateRecord(record, rulesConfig) {
     confidence,
     short_explanation: `${triage_status} due to ${triggered.length} triggered threshold(s).`,
     reasons_triggered,
+    missing_required_fields: missing,
+    missing_recommended_fields: missingRecommended,
     warnings,
     suggested_action,
     rationale: triggered.map((r) => `${r.id}: ${r.message} (metric ${r.metric} ${r.operator} ${r.threshold}).`).join(' ')

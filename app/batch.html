@@ -31,12 +31,25 @@
 
     <section class="card">
       <h3>Sortable results table</h3>
-      <table>
-        <thead>
-          <tr><th>Sample</th><th>Project</th><th>Stage</th><th>% 0-1000 bp</th><th>Status</th><th>Confidence</th><th>Reasons</th></tr>
-        </thead>
-        <tbody id="rows"></tbody>
-      </table>
+      <p><small class="muted">Click any column header to sort. Use the expand button to review full triage context, including missing required and recommended fields.</small></p>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th><button class="sort-btn" data-sort="sample_id" data-label="Sample">Sample</button></th>
+              <th><button class="sort-btn" data-sort="project_id" data-label="Project">Project</button></th>
+              <th><button class="sort-btn" data-sort="stage" data-label="Stage">Stage</button></th>
+              <th><button class="sort-btn" data-sort="percent_0_1000_bp" data-label="% 0-1000 bp">% 0-1000 bp</button></th>
+              <th><button class="sort-btn" data-sort="triage_status" data-label="Status">Status</button></th>
+              <th><button class="sort-btn" data-sort="confidence" data-label="Confidence">Confidence</button></th>
+              <th>Missing fields</th>
+              <th>Reasons</th>
+              <th>Details</th>
+            </tr>
+          </thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </div>
     </section>
   </main>
 
@@ -56,15 +69,57 @@
         document.getElementById('batchStatus').textContent = 'Unable to load threshold rules. Refresh and try again.';
       });
 
+    const confidenceRank = { high: 3, medium: 2, low: 1 };
+    const statusRank = {
+      'Fail/hold': 5,
+      'High risk': 4,
+      Review: 3,
+      'Proceed with caution': 2,
+      Proceed: 1
+    };
+
+    const sortState = { key: 'triage_status', direction: 'desc' };
+    let currentResults = [];
+
+    const formatMissingFields = (result) => {
+      const required = result.missing_required_fields || [];
+      const recommended = result.missing_recommended_fields || [];
+      if (!required.length && !recommended.length) return '<span class="muted">None</span>';
+
+      const lines = [];
+      if (required.length) lines.push(`<span class="field-chip required">Required: ${required.join(', ')}</span>`);
+      if (recommended.length) lines.push(`<span class="field-chip recommended">Recommended: ${recommended.join(', ')}</span>`);
+      return lines.join(' ');
+    };
+
+    const getSortValue = (item, key) => {
+      if (key === 'triage_status') return statusRank[item.result.triage_status] || 0;
+      if (key === 'confidence') return confidenceRank[item.result.confidence] || 0;
+      if (key === 'percent_0_1000_bp') return Number(item.record.percent_0_1000_bp ?? -1);
+      return String(item.record[key] || '').toLowerCase();
+    };
+
+    const sortResults = (results) => {
+      return [...results].sort((a, b) => {
+        const av = getSortValue(a, sortState.key);
+        const bv = getSortValue(b, sortState.key);
+        if (av < bv) return sortState.direction === 'asc' ? -1 : 1;
+        if (av > bv) return sortState.direction === 'asc' ? 1 : -1;
+        return 0;
+      });
+    };
+
     const render = (results) => {
+      currentResults = [...results];
       const counts = Object.fromEntries(statuses.map((s) => [s, 0]));
       results.forEach((r) => counts[r.result.triage_status]++);
       document.getElementById('kpi').innerHTML = statuses
         .map((s) => `<div class="kpi"><strong>${s}</strong><div>${counts[s]}</div></div>`).join('');
 
-      const sorted = [...results].sort((a, b) => a.result.triage_status.localeCompare(b.result.triage_status));
-      document.getElementById('rows').innerHTML = sorted.map(({ record, result }) => {
+      const sorted = sortResults(results);
+      document.getElementById('rows').innerHTML = sorted.map(({ record, result }, idx) => {
         const cls = `status-${result.triage_status.replace('/', ' ').replace(/\s+/g, '-')}`;
+        const detailId = `detail-${idx}`;
         return `<tr>
           <td>${record.sample_id || ''}</td>
           <td>${record.project_id || ''}</td>
@@ -72,10 +127,41 @@
           <td>${record.percent_0_1000_bp ?? ''}</td>
           <td><span class="badge ${cls}">${result.triage_status}</span></td>
           <td>${result.confidence}</td>
+          <td>${formatMissingFields(result)}</td>
           <td>${result.reasons_triggered.join(', ') || 'None'}</td>
+          <td>
+            <details id="${detailId}">
+              <summary>View</summary>
+              <div class="detail-copy">
+                <p><strong>Explanation:</strong> ${result.short_explanation}</p>
+                <p><strong>Suggested action:</strong> ${result.suggested_action}</p>
+                <p><strong>Rationale:</strong> ${result.rationale}</p>
+              </div>
+            </details>
+          </td>
         </tr>`;
       }).join('');
     };
+
+    document.querySelectorAll('.sort-btn').forEach((button) => {
+      button.addEventListener('click', () => {
+        const key = button.dataset.sort;
+        if (sortState.key === key) {
+          sortState.direction = sortState.direction === 'asc' ? 'desc' : 'asc';
+        } else {
+          sortState.key = key;
+          sortState.direction = key === 'triage_status' || key === 'confidence' ? 'desc' : 'asc';
+        }
+
+        document.querySelectorAll('.sort-btn').forEach((b) => {
+          b.classList.toggle('active', b === button);
+          const arrow = b === button ? (sortState.direction === 'asc' ? ' ↑' : ' ↓') : '';
+          b.textContent = `${b.dataset.label}${arrow}`;
+        });
+
+        render(currentResults);
+      });
+    });
 
     document.getElementById('csv').addEventListener('change', async (e) => {
       const file = e.target.files[0];

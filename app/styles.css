@@ -106,3 +106,54 @@ small.muted { color: #64748b; }
   border-radius: 6px;
   margin-bottom: 1rem;
 }
+
+
+.table-wrap {
+  overflow-x: auto;
+}
+
+.sort-btn {
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: 700;
+  padding: 0;
+  cursor: pointer;
+}
+
+.sort-btn.active {
+  color: var(--accent);
+}
+
+.field-chip {
+  display: inline-block;
+  margin: .1rem .3rem .1rem 0;
+  padding: .15rem .45rem;
+  border-radius: 999px;
+  font-size: .75rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.field-chip.required {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.field-chip.recommended {
+  background: #e0f2fe;
+  color: #075985;
+}
+
+.detail-copy {
+  margin-top: .5rem;
+  padding: .6rem;
+  background: #f8fafc;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.detail-copy p {
+  margin: .25rem 0;
+}
