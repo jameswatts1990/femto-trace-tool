@@ -13,6 +13,7 @@ Lightweight internal web-tool scaffold for long-read sequencing operations teams
   - Audit trail (`app/audit.html`)
 - Browser-side triage engine (`app/triage.js`) for deterministic explainable outputs.
 - CSV template for batch imports (`data/template.csv`).
+- Direct upload support for Femto output CSV/TSV exports (auto-mapped to triage fields).
 
 ## MVP outputs supported
 
@@ -23,6 +24,30 @@ For each record, the triage engine returns:
 - triggered reasons/rules
 - suggested action
 - rationale text
+
+
+## Batch import compatibility
+
+`app/batch.html` accepts either:
+
+- the native template columns (`data/template.csv`), or
+- Femto output exports with columns like `Well`, `Sample ID`, `Size (bp)`, `% (Conc.)`, `Avg. Size`, `TIC (ng/ul)`, `TIM (nmole/L)`.
+
+When Femto exports are uploaded, the app aggregates peak rows per sample and computes triage inputs using these factors:
+
+- `percent_0_1000_bp`: sum of `% (Conc.)` values where `Size (bp) <= 1000`
+- `avg_fragment_size_bp`: `Avg. Size`
+- `peak_size_bp`: size of the peak with the highest `% (Conc.)`
+- `concentration_ng_ul`: `TIC (ng/ul)`
+- `library_molarity_nM`: `TIM (nmole/L)`
+- `sample_id`: `Sample ID`
+
+For missing template-required fields in Femto exports, defaults are applied for triage continuity:
+
+- `date_analyzed`: current date at upload time
+- `stage`: inferred as `final_library` when sample id contains `PrLIB`, otherwise `post_library`
+
+These defaults keep uploads reviewable while still making assumptions visible in app status messaging.
 
 ## Quick local run
 
