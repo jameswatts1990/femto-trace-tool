@@ -44,3 +44,16 @@ Then open:
 - Thresholds are illustrative defaults and should be tuned to internal outcomes.
 
 For full design details, see `docs/mvp-spec.md`.
+
+## GitHub Pages deployment
+
+This project is static and browser-only. When published to GitHub Pages, open the site root and navigate from there:
+
+- `https://<org-or-user>.github.io/<repo>/`
+
+The root page links to:
+
+- Quick entry (`app/index.html`)
+- Batch view (`app/batch.html`)
+- Threshold settings (`app/settings.html`)
+- Audit (`app/audit.html`)
