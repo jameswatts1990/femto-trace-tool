@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Femto Trace Triage Tool - Threshold Settings</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header>
+    <strong>Femto Trace Triage Tool</strong>
+    <nav>
+      <a href="index.html">Quick Entry</a>
+      <a href="batch.html">Batch View</a>
+      <a href="settings.html">Threshold Settings</a>
+      <a href="audit.html">Audit</a>
+    </nav>
+  </header>
+  <main class="container">
+    <section class="card">
+      <h2>Threshold Settings (Admin)</h2>
+      <p class="muted">This MVP demonstrates configurable thresholds loaded from <code>data/rules.default.json</code>.</p>
+      <p><strong>Ruleset version:</strong> <span id="version"></span></p>
+      <div id="ruleTable"></div>
+      <p><small class="muted">Planned: draft/publish workflow, version history, impact preview on recent records, and role-protected editing.</small></p>
+    </section>
+  </main>
+  <script>
+    fetch('../data/rules.default.json').then((r) => r.json()).then((rules) => {
+      document.getElementById('version').textContent = rules.version;
+      const html = Object.entries(rules.stages).map(([stage, stageRules]) => `
+        <h3>${stage}</h3>
+        <table>
+          <thead><tr><th>Rule ID</th><th>Metric</th><th>Operator</th><th>Threshold</th><th>Severity</th><th>Enabled</th></tr></thead>
+          <tbody>
+            ${stageRules.map((rule) => `<tr>
+              <td>${rule.id}</td>
+              <td>${rule.metric}</td>
+              <td>${rule.operator}</td>
+              <td>${rule.threshold}</td>
+              <td>${rule.severity}</td>
+              <td>${rule.enabled}</td>
+            </tr>`).join('')}
+          </tbody>
+        </table>
+      `).join('');
+      document.getElementById('ruleTable').innerHTML = html;
+    });
+  </script>
+</body>
+</html>

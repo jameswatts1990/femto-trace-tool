@@ -1,0 +1,108 @@
+:root {
+  --bg: #f7f9fc;
+  --text: #1f2937;
+  --card: #ffffff;
+  --border: #dce3ef;
+  --accent: #1f6feb;
+  --proceed: #0d9488;
+  --caution: #ca8a04;
+  --review: #ea580c;
+  --highrisk: #dc2626;
+  --fail: #7f1d1d;
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+  color: var(--text);
+  background: var(--bg);
+}
+header {
+  background: #0f172a;
+  color: #fff;
+  padding: 1rem 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+nav a {
+  color: #cbd5e1;
+  text-decoration: none;
+  margin-left: 1rem;
+}
+nav a:hover { color: #fff; }
+.container {
+  max-width: 1100px;
+  margin: 1rem auto;
+  padding: 0 1rem 2rem;
+}
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 1rem;
+  margin-bottom: 1rem;
+}
+.grid { display: grid; gap: 1rem; }
+.grid-2 { grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+label { display: block; font-weight: 600; margin-bottom: .35rem; }
+input, select, textarea {
+  width: 100%;
+  padding: .55rem .65rem;
+  border: 1px solid #cfd8e3;
+  border-radius: 8px;
+  background: #fff;
+}
+textarea { min-height: 70px; }
+button {
+  background: var(--accent);
+  border: none;
+  color: #fff;
+  border-radius: 8px;
+  padding: .6rem .9rem;
+  cursor: pointer;
+}
+button.secondary { background: #475569; }
+.badge {
+  display: inline-block;
+  padding: .2rem .55rem;
+  border-radius: 999px;
+  font-size: .8rem;
+  color: #fff;
+  font-weight: 700;
+}
+.status-Proceed { background: var(--proceed); }
+.status-Proceed-with-caution { background: var(--caution); }
+.status-Review { background: var(--review); }
+.status-High-risk { background: var(--highrisk); }
+.status-Fail-hold { background: var(--fail); }
+.kpi-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: .75rem;
+}
+.kpi {
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: .8rem;
+}
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+th, td {
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  padding: .55rem;
+}
+small.muted { color: #64748b; }
+.notice {
+  border-left: 4px solid #0ea5e9;
+  background: #ecfeff;
+  color: #0c4a6e;
+  padding: .65rem .8rem;
+  border-radius: 6px;
+  margin-bottom: 1rem;
+}

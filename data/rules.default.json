@@ -1,0 +1,116 @@
+{
+  "version": "v0.1.0",
+  "description": "Initial transparent threshold set for Femto Trace Triage Tool",
+  "required_fields": ["sample_id", "stage", "date_analyzed", "percent_0_1000_bp"],
+  "recommended_fields": ["avg_fragment_size_bp", "peak_size_bp"],
+  "stages": {
+    "pre_library_gdna": [
+      {
+        "id": "pre-short-high-risk",
+        "metric": "percent_0_1000_bp",
+        "operator": ">",
+        "threshold": 35,
+        "severity": "high_risk",
+        "message": "High short-fragment proportion in pre-library gDNA.",
+        "suggested_action": "Review extraction quality and consider remediation before library prep.",
+        "enabled": true
+      },
+      {
+        "id": "pre-short-review",
+        "metric": "percent_0_1000_bp",
+        "operator": ">=",
+        "threshold": 25,
+        "severity": "review",
+        "message": "Moderately elevated short-fragment proportion in pre-library gDNA.",
+        "suggested_action": "Proceed only after scientist review.",
+        "enabled": true
+      },
+      {
+        "id": "pre-avg-size-caution",
+        "metric": "avg_fragment_size_bp",
+        "operator": "<",
+        "threshold": 12000,
+        "severity": "caution",
+        "message": "Average fragment size is below preferred pre-library range.",
+        "suggested_action": "Proceed with caution and monitor downstream metrics.",
+        "enabled": true
+      }
+    ],
+    "post_library": [
+      {
+        "id": "post-short-high-risk",
+        "metric": "percent_0_1000_bp",
+        "operator": ">",
+        "threshold": 40,
+        "severity": "high_risk",
+        "message": "Very high short-fragment proportion post-library.",
+        "suggested_action": "Hold for review before pooling/sequencing.",
+        "enabled": true
+      },
+      {
+        "id": "post-short-review",
+        "metric": "percent_0_1000_bp",
+        "operator": ">",
+        "threshold": 30,
+        "severity": "review",
+        "message": "Elevated short-fragment proportion post-library.",
+        "suggested_action": "Review suitability for pooling with cleaner libraries.",
+        "enabled": true
+      }
+    ],
+    "post_size_selection": [
+      {
+        "id": "pss-short-high-risk",
+        "metric": "percent_0_1000_bp",
+        "operator": ">",
+        "threshold": 30,
+        "severity": "high_risk",
+        "message": "Short-fragment carryover remains high after size selection.",
+        "suggested_action": "Investigate size selection performance.",
+        "enabled": true
+      },
+      {
+        "id": "pss-short-review",
+        "metric": "percent_0_1000_bp",
+        "operator": ">",
+        "threshold": 20,
+        "severity": "review",
+        "message": "Short-fragment carryover is above preferred range after size selection.",
+        "suggested_action": "Review prior to release to final library processing.",
+        "enabled": true
+      }
+    ],
+    "final_library": [
+      {
+        "id": "final-short-high-risk",
+        "metric": "percent_0_1000_bp",
+        "operator": ">",
+        "threshold": 25,
+        "severity": "high_risk",
+        "message": "Final library short-fragment proportion is high.",
+        "suggested_action": "Hold and review before sequencing/pooling.",
+        "enabled": true
+      },
+      {
+        "id": "final-short-review",
+        "metric": "percent_0_1000_bp",
+        "operator": ">",
+        "threshold": 15,
+        "severity": "review",
+        "message": "Final library has elevated short-fragment content.",
+        "suggested_action": "Review impact on run quality and pooling strategy.",
+        "enabled": true
+      },
+      {
+        "id": "final-molarity-caution",
+        "metric": "library_molarity_nM",
+        "operator": "<",
+        "threshold": 5,
+        "severity": "caution",
+        "message": "Final library molarity is low.",
+        "suggested_action": "Check concentration/molarity calculations before sequencing.",
+        "enabled": true
+      }
+    ]
+  }
+}
