@@ -49,6 +49,19 @@ For missing template-required fields in Femto exports, defaults are applied for 
 
 These defaults keep uploads reviewable while still making assumptions visible in app status messaging.
 
+
+## ML assist workflow (human-in-the-loop)
+
+Batch View now includes a low-risk machine-learning assist flow:
+
+- Model suggestion for triage label + confidence score + top factors ("why this prediction").
+- Inline human review controls: Agree, or correct label with optional reason tags.
+- Feedback logging in browser storage with features, prediction, corrected label, timestamp, reviewer ID/role, and model/data version.
+- Retraining button to periodically rebuild stage-level priors from reviewed examples with a lightweight holdout estimate.
+- Audit page summarizing corrections and governance metadata.
+
+This keeps the product in assist mode by default while collecting supervised data for safer future automation.
+
 ## Quick local run
 
 Because this MVP uses module imports and JSON fetch calls, run with a local static server from repo root:

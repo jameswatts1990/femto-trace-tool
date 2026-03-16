@@ -25,13 +25,23 @@
     </section>
 
     <section class="card">
+      <h3>ML assist mode</h3>
+      <p class="muted">Model suggestions are shown inline. Human reviewers remain the final decision-maker while the model learns from feedback.</p>
+      <div id="mlSummary" class="kpi-row"></div>
+      <div class="inline-actions">
+        <button id="retrain" class="secondary">Retrain from reviewed samples</button>
+        <small id="retrainStatus" class="muted">No retraining run in this session.</small>
+      </div>
+    </section>
+
+    <section class="card">
       <h3>Counts by triage category</h3>
       <div id="kpi" class="kpi-row"></div>
     </section>
 
     <section class="card">
       <h3>Sortable results table</h3>
-      <p><small class="muted">Click any column header to sort. Use the expand button to review full triage context, including missing required and recommended fields.</small></p>
+      <p><small class="muted">Click any column header to sort. Expand a row to review triage context and provide one-click ML feedback (Agree / Correct).</small></p>
       <div class="table-wrap">
         <table>
           <thead>
@@ -42,6 +52,7 @@
               <th><button class="sort-btn" data-sort="percent_0_1000_bp" data-label="% 0-1000 bp">% 0-1000 bp</button></th>
               <th><button class="sort-btn" data-sort="triage_status" data-label="Status">Status</button></th>
               <th><button class="sort-btn" data-sort="confidence" data-label="Confidence">Confidence</button></th>
+              <th><button class="sort-btn" data-sort="ml_confidence" data-label="ML score">ML score</button></th>
               <th>Missing fields</th>
               <th>Reasons</th>
               <th>Details</th>
@@ -56,6 +67,14 @@
   <script type="module">
     import { evaluateRecord } from './triage.js';
     import { parseBatchRows } from './batch-import.js';
+    import {
+      getModelState,
+      getReviewQueueSummary,
+      predictAssistedLabel,
+      recordReviewFeedback,
+      retrainModelFromFeedback
+    } from './ml-assist.js';
+
     let rules;
     const statuses = ['Proceed', 'Proceed with caution', 'Review', 'High risk', 'Fail/hold'];
     fetch('../data/rules.default.json')
@@ -81,6 +100,21 @@
     const sortState = { key: 'triage_status', direction: 'desc' };
     let currentResults = [];
 
+    const updateMlSummary = () => {
+      const state = getModelState();
+      const queue = getReviewQueueSummary();
+      const cards = [
+        `<div class="kpi"><strong>Mode</strong><div>Assist mode</div></div>`,
+        `<div class="kpi"><strong>Model version</strong><div>${state.modelVersion}</div></div>`,
+        `<div class="kpi"><strong>Reviewed samples</strong><div>${queue.totalReviewed}</div></div>`,
+        `<div class="kpi"><strong>Priority review tags</strong><div>${queue.highPriorityExamples}</div></div>`
+      ];
+      if (state.holdoutAccuracy !== null) {
+        cards.push(`<div class="kpi"><strong>Holdout accuracy</strong><div>${(state.holdoutAccuracy * 100).toFixed(1)}%</div></div>`);
+      }
+      document.getElementById('mlSummary').innerHTML = cards.join('');
+    };
+
     const formatMissingFields = (result) => {
       const required = result.missing_required_fields || [];
       const recommended = result.missing_recommended_fields || [];
@@ -96,6 +130,7 @@
       if (key === 'triage_status') return statusRank[item.result.triage_status] || 0;
       if (key === 'confidence') return confidenceRank[item.result.confidence] || 0;
       if (key === 'percent_0_1000_bp') return Number(item.record.percent_0_1000_bp ?? -1);
+      if (key === 'ml_confidence') return Number(item.ml.numericConfidence ?? 0);
       return String(item.record[key] || '').toLowerCase();
     };
 
@@ -109,17 +144,23 @@
       });
     };
 
+    const mlBadgeClass = (confidenceBucket) => `ml-chip ${confidenceBucket}`;
+
     const render = (results) => {
       currentResults = [...results];
+      updateMlSummary();
       const counts = Object.fromEntries(statuses.map((s) => [s, 0]));
       results.forEach((r) => counts[r.result.triage_status]++);
       document.getElementById('kpi').innerHTML = statuses
         .map((s) => `<div class="kpi"><strong>${s}</strong><div>${counts[s]}</div></div>`).join('');
 
       const sorted = sortResults(results);
-      document.getElementById('rows').innerHTML = sorted.map(({ record, result }, idx) => {
+      document.getElementById('rows').innerHTML = sorted.map(({ record, result, ml }, idx) => {
         const cls = `status-${result.triage_status.replace('/', ' ').replace(/\s+/g, '-')}`;
         const detailId = `detail-${idx}`;
+        const confidencePct = `${Math.round(ml.numericConfidence * 100)}%`;
+        const reviewHint = ml.reviewRequired ? '<span class="field-chip required">Human review required</span>' : '<span class="field-chip recommended">Eligible for auto-accept</span>';
+
         return `<tr>
           <td>${record.sample_id || ''}</td>
           <td>${record.project_id || ''}</td>
@@ -127,6 +168,7 @@
           <td>${record.percent_0_1000_bp ?? ''}</td>
           <td><span class="badge ${cls}">${result.triage_status}</span></td>
           <td>${result.confidence}</td>
+          <td><span class="${mlBadgeClass(ml.confidenceBucket)}">${confidencePct}</span></td>
           <td>${formatMissingFields(result)}</td>
           <td>${result.reasons_triggered.join(', ') || 'None'}</td>
           <td>
@@ -136,11 +178,74 @@
                 <p><strong>Explanation:</strong> ${result.short_explanation}</p>
                 <p><strong>Suggested action:</strong> ${result.suggested_action}</p>
                 <p><strong>Rationale:</strong> ${result.rationale}</p>
+                <hr />
+                <p><strong>ML suggestion:</strong> ${ml.predictedLabel} <span class="${mlBadgeClass(ml.confidenceBucket)}">${confidencePct}</span></p>
+                <p><strong>Anomaly type:</strong> ${ml.anomalyType}</p>
+                <p><strong>Root-cause candidate:</strong> ${ml.rootCauseCandidate}</p>
+                <p><strong>Why this prediction:</strong> ${ml.topFactors.join(' • ') || 'No factors available'}</p>
+                <p>${reviewHint}</p>
+                <div class="review-inline">
+                  <label>Reviewer ID</label>
+                  <input id="reviewer-${idx}" placeholder="ops_user" />
+                  <label>Role</label>
+                  <select id="role-${idx}">
+                    <option value="operator">operator</option>
+                    <option value="scientist">scientist</option>
+                    <option value="lead">lead</option>
+                  </select>
+                  <label>Correction (if needed)</label>
+                  <select id="label-${idx}">
+                    ${statuses.map((s) => `<option value="${s}" ${s === ml.predictedLabel ? 'selected' : ''}>${s}</option>`).join('')}
+                  </select>
+                  <label>Reason tags (comma-separated)</label>
+                  <input id="reason-${idx}" placeholder="false positive, missing context" />
+                  <div class="inline-actions">
+                    <button class="secondary" data-action="agree" data-idx="${idx}">Agree</button>
+                    <button data-action="save" data-idx="${idx}">Disagree / Save correction</button>
+                    <small id="saved-${idx}" class="muted"></small>
+                  </div>
+                </div>
               </div>
             </details>
           </td>
         </tr>`;
       }).join('');
+
+      document.querySelectorAll('[data-action="agree"]').forEach((button) => {
+        button.addEventListener('click', () => {
+          const idx = Number(button.dataset.idx);
+          const row = sorted[idx];
+          document.getElementById(`label-${idx}`).value = row.ml.predictedLabel;
+          saveFeedback(idx, row.ml.predictedLabel);
+        });
+      });
+
+      document.querySelectorAll('[data-action="save"]').forEach((button) => {
+        button.addEventListener('click', () => {
+          const idx = Number(button.dataset.idx);
+          saveFeedback(idx, document.getElementById(`label-${idx}`).value);
+        });
+      });
+
+      const saveFeedback = (idx, correctedLabel) => {
+        const row = sorted[idx];
+        const reasonTags = (document.getElementById(`reason-${idx}`).value || '')
+          .split(',')
+          .map((token) => token.trim())
+          .filter(Boolean);
+
+        recordReviewFeedback({
+          record: row.record,
+          prediction: row.ml,
+          correctedLabel,
+          reviewerId: document.getElementById(`reviewer-${idx}`).value,
+          reviewerRole: document.getElementById(`role-${idx}`).value,
+          reasonTags
+        });
+
+        document.getElementById(`saved-${idx}`).textContent = 'Feedback saved. Model learning updated for next retrain.';
+        updateMlSummary();
+      };
     };
 
     document.querySelectorAll('.sort-btn').forEach((button) => {
@@ -150,7 +255,7 @@
           sortState.direction = sortState.direction === 'asc' ? 'desc' : 'asc';
         } else {
           sortState.key = key;
-          sortState.direction = key === 'triage_status' || key === 'confidence' ? 'desc' : 'asc';
+          sortState.direction = key === 'triage_status' || key === 'confidence' || key === 'ml_confidence' ? 'desc' : 'asc';
         }
 
         document.querySelectorAll('.sort-btn').forEach((b) => {
@@ -161,6 +266,29 @@
 
         render(currentResults);
       });
+    });
+
+    document.getElementById('retrain').addEventListener('click', () => {
+      const nextState = retrainModelFromFeedback();
+      const status = document.getElementById('retrainStatus');
+      if (!nextState) {
+        status.textContent = 'Retraining skipped: add reviewed examples first.';
+        return;
+      }
+      const accuracy = nextState.holdoutAccuracy === null
+        ? 'n/a'
+        : `${(nextState.holdoutAccuracy * 100).toFixed(1)}%`;
+      status.textContent = `Retrained ${nextState.modelVersion} on ${nextState.datasetVersion}. Holdout accuracy: ${accuracy}.`;
+      if (currentResults.length) {
+        currentResults = currentResults.map(({ record, result }) => ({
+          record,
+          result,
+          ml: predictAssistedLabel(record, result, nextState)
+        }));
+        render(currentResults);
+      } else {
+        updateMlSummary();
+      }
     });
 
     document.getElementById('csv').addEventListener('change', async (e) => {
@@ -181,8 +309,16 @@
         document.getElementById('batchStatus').textContent = `Loaded ${records.length} records from template-compatible CSV.`;
       }
 
-      render(records.map((record) => ({ record, result: evaluateRecord(record, rules) })));
+      const state = getModelState();
+      const evaluated = records.map((record) => {
+        const result = evaluateRecord(record, rules);
+        const ml = predictAssistedLabel(record, result, state);
+        return { record, result, ml };
+      });
+      render(evaluated);
     });
+
+    updateMlSummary();
   </script>
 </body>
 </html>
