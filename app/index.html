@@ -47,6 +47,7 @@
       </div>
       <div style="margin-top:1rem;display:flex;gap:.6rem;">
         <button id="run">Run triage</button>
+        <small id="loadingNote" class="muted">Loading rule set…</small>
       </div>
     </section>
 
@@ -67,9 +68,26 @@
     import { evaluateRecord } from './triage.js';
 
     let rules;
+    const runButton = document.getElementById('run');
+    runButton.disabled = true;
+
     const loadRules = async () => {
-      const response = await fetch('../data/rules.default.json');
-      rules = await response.json();
+      try {
+        const response = await fetch('../data/rules.default.json');
+        rules = await response.json();
+        runButton.disabled = false;
+        document.getElementById('loadingNote').textContent = 'Rules loaded.';
+      } catch (error) {
+        const result = document.getElementById('result');
+        result.hidden = false;
+        document.getElementById('statusBadge').className = 'badge status-Fail-hold';
+        document.getElementById('statusBadge').textContent = 'Rules unavailable';
+        document.getElementById('confidence').textContent = 'Confidence: low';
+        document.getElementById('explanation').textContent = 'Unable to load threshold rules. Refresh and try again.';
+        document.getElementById('rationale').textContent = String(error);
+        document.getElementById('reasons').textContent = 'rules_load_error';
+        document.getElementById('action').textContent = 'Confirm this site is being served over HTTP(S) and retry.';
+      }
     };
     loadRules();
 
