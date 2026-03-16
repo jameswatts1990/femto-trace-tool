@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Femto Trace Triage Tool</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header>
+    <strong>Femto Trace Triage Tool</strong>
+    <nav>
+      <a href="index.html">Quick Entry</a>
+      <a href="batch.html">Batch View</a>
+      <a href="settings.html">Threshold Settings</a>
+      <a href="audit.html">Audit</a>
+    </nav>
+  </header>
+
+  <main class="container">
+    <div class="notice">Decision support aid only — final scientific judgement remains with the operations team.</div>
+
+    <section class="card">
+      <h2>Single Record Quick Entry</h2>
+      <small class="muted">Minimum required: sample ID, stage, date analysed, and % 0–1000 bp.</small>
+      <div class="grid grid-2" style="margin-top:1rem;">
+        <div><label>Sample ID</label><input id="sample_id" /></div>
+        <div><label>Project ID</label><input id="project_id" /></div>
+        <div><label>Batch ID</label><input id="batch_id" /></div>
+        <div>
+          <label>Stage</label>
+          <select id="stage">
+            <option value="pre_library_gdna">pre_library_gdna</option>
+            <option value="post_library">post_library</option>
+            <option value="post_size_selection">post_size_selection</option>
+            <option value="final_library">final_library</option>
+          </select>
+        </div>
+        <div><label>Date analysed</label><input id="date_analyzed" type="date" /></div>
+        <div><label>% material in 0–1000 bp</label><input id="percent_0_1000_bp" type="number" step="0.01" /></div>
+        <div><label>Average fragment size (bp)</label><input id="avg_fragment_size_bp" type="number" /></div>
+        <div><label>Peak size (bp)</label><input id="peak_size_bp" type="number" /></div>
+        <div><label>Concentration (ng/µL)</label><input id="concentration_ng_ul" type="number" step="0.01" /></div>
+        <div><label>Total DNA (ng)</label><input id="total_dna_ng" type="number" step="0.01" /></div>
+        <div><label>Library molarity (nM)</label><input id="library_molarity_nM" type="number" step="0.01" /></div>
+        <div style="grid-column:1/-1;"><label>Notes</label><textarea id="notes"></textarea></div>
+      </div>
+      <div style="margin-top:1rem;display:flex;gap:.6rem;">
+        <button id="run">Run triage</button>
+      </div>
+    </section>
+
+    <section id="result" class="card" hidden>
+      <h3>Suggested triage</h3>
+      <p><span id="statusBadge" class="badge"></span> <small id="confidence" class="muted"></small></p>
+      <p id="explanation"></p>
+      <details>
+        <summary>Rationale</summary>
+        <p id="rationale"></p>
+      </details>
+      <p><strong>Reasons triggered:</strong> <span id="reasons"></span></p>
+      <p><strong>Suggested action:</strong> <span id="action"></span></p>
+    </section>
+  </main>
+
+  <script type="module">
+    import { evaluateRecord } from './triage.js';
+
+    let rules;
+    const loadRules = async () => {
+      const response = await fetch('../data/rules.default.json');
+      rules = await response.json();
+    };
+    loadRules();
+
+    const fields = [
+      'sample_id','project_id','batch_id','stage','date_analyzed','percent_0_1000_bp',
+      'avg_fragment_size_bp','peak_size_bp','concentration_ng_ul','total_dna_ng','library_molarity_nM','notes'
+    ];
+
+    const toRecord = () => {
+      const record = {};
+      fields.forEach((id) => record[id] = document.getElementById(id).value);
+      ['percent_0_1000_bp','avg_fragment_size_bp','peak_size_bp','concentration_ng_ul','total_dna_ng','library_molarity_nM']
+        .forEach((id) => {
+          if (record[id] !== '') record[id] = Number(record[id]);
+        });
+      return record;
+    };
+
+    document.getElementById('run').addEventListener('click', () => {
+      const result = evaluateRecord(toRecord(), rules);
+      document.getElementById('result').hidden = false;
+      const cls = `status-${result.triage_status.replace('/', ' ').replace(/\s+/g, '-')}`;
+      const badge = document.getElementById('statusBadge');
+      badge.className = `badge ${cls}`;
+      badge.textContent = result.triage_status;
+      document.getElementById('confidence').textContent = `Confidence: ${result.confidence}`;
+      document.getElementById('explanation').textContent = result.short_explanation;
+      document.getElementById('rationale').textContent = result.rationale;
+      document.getElementById('reasons').textContent = result.reasons_triggered.length ? result.reasons_triggered.join(', ') : 'None';
+      document.getElementById('action').textContent = result.suggested_action;
+    });
+  </script>
+</body>
+</html>

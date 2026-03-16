@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Femto Trace Triage Tool - Audit</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header>
+    <strong>Femto Trace Triage Tool</strong>
+    <nav>
+      <a href="index.html">Quick Entry</a>
+      <a href="batch.html">Batch View</a>
+      <a href="settings.html">Threshold Settings</a>
+      <a href="audit.html">Audit</a>
+    </nav>
+  </header>
+  <main class="container">
+    <section class="card">
+      <h2>Audit Trail (MVP structure)</h2>
+      <table>
+        <thead><tr><th>Date</th><th>User</th><th>Entity</th><th>Event</th><th>Details</th></tr></thead>
+        <tbody>
+          <tr><td>2026-03-10 09:14</td><td>teamlead_a</td><td>record:SMP-002</td><td>override</td><td>Changed High risk → Review with reason "repeat check approved".</td></tr>
+          <tr><td>2026-03-10 08:52</td><td>admin_ops</td><td>ruleset:v0.1.0</td><td>published</td><td>Initial threshold profile activated.</td></tr>
+        </tbody>
+      </table>
+      <p><small class="muted">Planned: backend-backed immutable event table and filters by date/event/user.</small></p>
+    </section>
+  </main>
+</body>
+</html>

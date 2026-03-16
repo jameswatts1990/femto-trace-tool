@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Femto Trace Triage Tool - Batch</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header>
+    <strong>Femto Trace Triage Tool</strong>
+    <nav>
+      <a href="index.html">Quick Entry</a>
+      <a href="batch.html">Batch View</a>
+      <a href="settings.html">Threshold Settings</a>
+      <a href="audit.html">Audit</a>
+    </nav>
+  </header>
+  <main class="container">
+    <section class="card">
+      <h2>Batch Upload and Review</h2>
+      <p><a href="../data/template.csv" download>Download CSV template</a></p>
+      <input id="csv" type="file" accept=".csv" />
+      <p><small class="muted">MVP supports local parse preview and triage scoring in-browser.</small></p>
+    </section>
+
+    <section class="card">
+      <h3>Counts by triage category</h3>
+      <div id="kpi" class="kpi-row"></div>
+    </section>
+
+    <section class="card">
+      <h3>Sortable results table</h3>
+      <table>
+        <thead>
+          <tr><th>Sample</th><th>Project</th><th>Stage</th><th>% 0-1000 bp</th><th>Status</th><th>Confidence</th><th>Reasons</th></tr>
+        </thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </section>
+  </main>
+
+  <script type="module">
+    import { evaluateRecord } from './triage.js';
+    let rules;
+    const statuses = ['Proceed', 'Proceed with caution', 'Review', 'High risk', 'Fail/hold'];
+    fetch('../data/rules.default.json').then(r => r.json()).then(r => rules = r);
+
+    const parseCsv = (text) => {
+      const [headerLine, ...lines] = text.trim().split(/\r?\n/);
+      const headers = headerLine.split(',').map((h) => h.trim());
+      return lines.map((line) => {
+        const cols = line.split(',');
+        const record = {};
+        headers.forEach((h, i) => record[h] = (cols[i] || '').trim());
+        ['percent_0_1000_bp','avg_fragment_size_bp','peak_size_bp','library_molarity_nM']
+          .forEach((n) => { if (record[n] !== '') record[n] = Number(record[n]); });
+        return record;
+      });
+    };
+
+    const render = (results) => {
+      const counts = Object.fromEntries(statuses.map((s) => [s, 0]));
+      results.forEach((r) => counts[r.result.triage_status]++);
+      document.getElementById('kpi').innerHTML = statuses
+        .map((s) => `<div class="kpi"><strong>${s}</strong><div>${counts[s]}</div></div>`).join('');
+
+      const sorted = [...results].sort((a, b) => a.result.triage_status.localeCompare(b.result.triage_status));
+      document.getElementById('rows').innerHTML = sorted.map(({ record, result }) => {
+        const cls = `status-${result.triage_status.replace('/', ' ').replace(/\s+/g, '-')}`;
+        return `<tr>
+          <td>${record.sample_id || ''}</td>
+          <td>${record.project_id || ''}</td>
+          <td>${record.stage || ''}</td>
+          <td>${record.percent_0_1000_bp ?? ''}</td>
+          <td><span class="badge ${cls}">${result.triage_status}</span></td>
+          <td>${result.confidence}</td>
+          <td>${result.reasons_triggered.join(', ') || 'None'}</td>
+        </tr>`;
+      }).join('');
+    };
+
+    document.getElementById('csv').addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file || !rules) return;
+      const text = await file.text();
+      const rows = parseCsv(text);
+      render(rows.map((record) => ({ record, result: evaluateRecord(record, rules) })));
+    });
+  </script>
+</body>
+</html>
