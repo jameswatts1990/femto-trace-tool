@@ -157,3 +157,43 @@ small.muted { color: #64748b; }
 .detail-copy p {
   margin: .25rem 0;
 }
+
+.inline-actions {
+  display: flex;
+  gap: .6rem;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-top: .6rem;
+}
+
+.ml-chip {
+  display: inline-block;
+  border-radius: 999px;
+  padding: .2rem .5rem;
+  font-size: .75rem;
+  font-weight: 700;
+  color: #fff;
+}
+
+.ml-chip.high { background: #0d9488; }
+.ml-chip.medium { background: #ca8a04; }
+.ml-chip.low { background: #dc2626; }
+
+.review-inline {
+  border-top: 1px dashed var(--border);
+  margin-top: .5rem;
+  padding-top: .6rem;
+}
+
+.review-inline label {
+  font-size: .82rem;
+  font-weight: 600;
+  color: #334155;
+  margin-top: .4rem;
+}
+
+hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: .75rem 0;
+}
