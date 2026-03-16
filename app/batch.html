@@ -42,6 +42,7 @@
 
   <script type="module">
     import { evaluateRecord } from './triage.js';
+    import { parseBatchRows } from './batch-import.js';
     let rules;
     const statuses = ['Proceed', 'Proceed with caution', 'Review', 'High risk', 'Fail/hold'];
     fetch('../data/rules.default.json')
@@ -54,19 +55,6 @@
       .catch(() => {
         document.getElementById('batchStatus').textContent = 'Unable to load threshold rules. Refresh and try again.';
       });
-
-    const parseCsv = (text) => {
-      const [headerLine, ...lines] = text.trim().split(/\r?\n/);
-      const headers = headerLine.split(',').map((h) => h.trim());
-      return lines.map((line) => {
-        const cols = line.split(',');
-        const record = {};
-        headers.forEach((h, i) => record[h] = (cols[i] || '').trim());
-        ['percent_0_1000_bp','avg_fragment_size_bp','peak_size_bp','library_molarity_nM']
-          .forEach((n) => { if (record[n] !== '') record[n] = Number(record[n]); });
-        return record;
-      });
-    };
 
     const render = (results) => {
       const counts = Object.fromEntries(statuses.map((s) => [s, 0]));
@@ -93,8 +81,21 @@
       const file = e.target.files[0];
       if (!file || !rules) return;
       const text = await file.text();
-      const rows = parseCsv(text);
-      render(rows.map((record) => ({ record, result: evaluateRecord(record, rules) })));
+      const parsed = parseBatchRows(text);
+      const records = parsed.rows;
+      if (!records.length) {
+        document.getElementById('batchStatus').textContent = 'No rows found in uploaded file.';
+        render([]);
+        return;
+      }
+
+      if (parsed.format === 'femto_export') {
+        document.getElementById('batchStatus').textContent = `Detected Femto export format. Auto-mapped ${records.length} samples with computed % 0-1000 bp for triage.`;
+      } else {
+        document.getElementById('batchStatus').textContent = `Loaded ${records.length} records from template-compatible CSV.`;
+      }
+
+      render(records.map((record) => ({ record, result: evaluateRecord(record, rules) })));
     });
   </script>
 </body>
