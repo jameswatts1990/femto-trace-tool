@@ -52,6 +52,9 @@ const buildTopFactors = (record, result, learnedLabel) => {
   if (record.library_molarity_nM !== undefined && record.library_molarity_nM !== '') {
     factors.push(`Library molarity nM: ${record.library_molarity_nM}`);
   }
+  if (record.percent_0_1000_bp_source) {
+    factors.push(`Short-fragment source: ${record.percent_0_1000_bp_source}`);
+  }
   if (result.reasons_triggered?.length) {
     factors.push(`Triggered rules: ${result.reasons_triggered.slice(0, 2).join(', ')}`);
   }

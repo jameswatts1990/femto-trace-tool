@@ -197,3 +197,41 @@ hr {
   border-top: 1px solid var(--border);
   margin: .75rem 0;
 }
+
+.ml-process {
+  margin-top: 1rem;
+  padding: .85rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.ml-process h4 {
+  margin: 0 0 .6rem;
+}
+
+.ml-process ol {
+  margin: 0;
+  padding-left: 1.2rem;
+}
+
+.ml-process li + li {
+  margin-top: .35rem;
+}
+
+.trace-callout {
+  margin-top: .6rem;
+  padding: .7rem .8rem;
+  border-left: 4px solid #0ea5e9;
+  background: #eff6ff;
+  border-radius: 6px;
+}
+
+.trace-callout ul {
+  margin: .4rem 0 0;
+  padding-left: 1.2rem;
+}
+
+.trace-callout li + li {
+  margin-top: .25rem;
+}

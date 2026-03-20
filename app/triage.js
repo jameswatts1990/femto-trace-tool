@@ -15,6 +15,8 @@ const statusMap = {
   0: 'Proceed'
 };
 
+const hasValue = (value) => value !== undefined && value !== null && value !== '';
+
 function compare(operator, value, threshold) {
   if (value === undefined || value === null || value === '') return false;
   const n = Number(value);
@@ -30,9 +32,9 @@ function compare(operator, value, threshold) {
 }
 
 export function evaluateRecord(record, rulesConfig) {
-  const warnings = [];
-  const missing = rulesConfig.required_fields.filter((f) => !record[f]);
-  const missingRecommended = rulesConfig.recommended_fields.filter((f) => !record[f]);
+  const warnings = [...(record.triage_warnings || [])];
+  const missing = rulesConfig.required_fields.filter((f) => !hasValue(record[f]));
+  const missingRecommended = rulesConfig.recommended_fields.filter((f) => !hasValue(record[f]));
   if (missing.length) {
     return {
       triage_status: 'Fail/hold',
@@ -83,7 +85,7 @@ export function evaluateRecord(record, rulesConfig) {
       missing_recommended_fields: missingRecommended,
       warnings,
       suggested_action: 'Proceed per SOP; continue routine QC checks.',
-      rationale: `Stage ${record.stage}: all configured thresholds passed.`
+      rationale: `Stage ${record.stage}: all configured thresholds passed.${warnings.length ? ` Additional trace context: ${warnings.join(' ')}` : ''}`
     };
   }
 
@@ -100,6 +102,6 @@ export function evaluateRecord(record, rulesConfig) {
     missing_recommended_fields: missingRecommended,
     warnings,
     suggested_action,
-    rationale: triggered.map((r) => `${r.id}: ${r.message} (metric ${r.metric} ${r.operator} ${r.threshold}).`).join(' ')
+    rationale: `${triggered.map((r) => `${r.id}: ${r.message} (metric ${r.metric} ${r.operator} ${r.threshold}).`).join(' ')}${warnings.length ? ` Additional trace context: ${warnings.join(' ')}` : ''}`
   };
 }

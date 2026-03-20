@@ -32,6 +32,16 @@
         <button id="retrain" class="secondary">Retrain from reviewed samples</button>
         <small id="retrainStatus" class="muted">No retraining run in this session.</small>
       </div>
+      <div class="ml-process">
+        <h4>How the ML process works</h4>
+        <ol>
+          <li><strong>Rule-first triage:</strong> each sample is scored with the configured Femto thresholds, including any whole-trace context inferred from the uploaded peak table.</li>
+          <li><strong>Assist prediction:</strong> the ML helper starts from the rule outcome, then adjusts confidence using prior reviewed outcomes for the same stage.</li>
+          <li><strong>Human feedback:</strong> reviewers can agree with the suggestion or save a corrected label plus reason tags directly from the table.</li>
+          <li><strong>Session retraining:</strong> retraining summarizes reviewed examples into stage-level overrides and reports holdout accuracy on a small withheld subset.</li>
+        </ol>
+        <p class="muted">This is a lightweight assist model in the browser, not a black-box replacement for QC review.</p>
+      </div>
     </section>
 
     <section class="card">
@@ -160,6 +170,9 @@
         const detailId = `detail-${idx}`;
         const confidencePct = `${Math.round(ml.numericConfidence * 100)}%`;
         const reviewHint = ml.reviewRequired ? '<span class="field-chip required">Human review required</span>' : '<span class="field-chip recommended">Eligible for auto-accept</span>';
+        const warningMarkup = (result.warnings || []).length
+          ? `<div class="trace-callout"><strong>Whole-trace context:</strong><ul>${result.warnings.map((warning) => `<li>${warning}</li>`).join('')}</ul></div>`
+          : '';
 
         return `<tr>
           <td>${record.sample_id || ''}</td>
@@ -178,6 +191,7 @@
                 <p><strong>Explanation:</strong> ${result.short_explanation}</p>
                 <p><strong>Suggested action:</strong> ${result.suggested_action}</p>
                 <p><strong>Rationale:</strong> ${result.rationale}</p>
+                ${warningMarkup}
                 <hr />
                 <p><strong>ML suggestion:</strong> ${ml.predictedLabel} <span class="${mlBadgeClass(ml.confidenceBucket)}">${confidencePct}</span></p>
                 <p><strong>Anomaly type:</strong> ${ml.anomalyType}</p>
@@ -308,7 +322,10 @@
         const invalidNote = metadata.invalidPercentRows
           ? ` ${metadata.invalidPercentRows} peak row(s) had non-numeric % values and were skipped in % 0-1000 bp calculations.`
           : '';
-        document.getElementById('batchStatus').textContent = `Detected Femto export format. Auto-mapped ${records.length} samples from ${metadata.sourceRows || records.length} rows (${metadata.peakRows || 0} peak rows, ${metadata.blankSummaryRows || 0} summary rows) with computed % 0-1000 bp for triage.${invalidNote}`;
+        const inferredNote = metadata.inferredZeroShortPercentSamples
+          ? ` ${metadata.inferredZeroShortPercentSamples} sample(s) had 0-1000 bp inferred as 0% because the whole trace showed no measurable small-fragment peak.`
+          : '';
+        document.getElementById('batchStatus').textContent = `Detected Femto export format. Auto-mapped ${records.length} samples from ${metadata.sourceRows || records.length} rows (${metadata.peakRows || 0} peak rows, ${metadata.blankSummaryRows || 0} summary rows) with computed % 0-1000 bp for triage.${invalidNote}${inferredNote}`;
       } else {
         document.getElementById('batchStatus').textContent = `Loaded ${records.length} records from template-compatible CSV.`;
       }

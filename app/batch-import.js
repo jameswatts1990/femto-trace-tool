@@ -132,11 +132,34 @@ const isFemtoExport = (headers) => {
     && mapped.tim);
 };
 
+const buildTraceWarnings = (record) => {
+  const warnings = [];
+
+  if (record.percent_0_1000_bp_source === 'inferred_no_small_peak') {
+    const dominantPeakText = record.dominant_peak_size_bp ? `${record.dominant_peak_size_bp} bp` : 'above 1000 bp';
+    warnings.push(`0–1000 bp was inferred as 0% from the whole trace because no <=1000 bp peak carried measurable concentration while the dominant peak was ${dominantPeakText}.`);
+  }
+
+  if (record.percent_0_1000_bp_source === 'sum_small_peaks' && record.detected_short_peak_count > 0) {
+    warnings.push(`Whole-trace review found ${record.detected_short_peak_count} measurable peak(s) at <=1000 bp contributing ${record.short_percent}% of concentration.`);
+  }
+
+  if (record.percent_0_1000_bp_source === 'fallback_zero_no_quantified_peaks') {
+    warnings.push('No quantified peak percentages were available in the trace export, so 0–1000 bp was defaulted to 0%. Review the raw trace before release.');
+  }
+
+  if (record.invalid_percent_peak_rows > 0) {
+    warnings.push(`${record.invalid_percent_peak_rows} peak row(s) had non-numeric % concentration values and were excluded from the whole-trace summary.`);
+  }
+
+  return warnings;
+};
+
 const normalizeFemtoRecord = (record, defaultDate, headerMap) => {
   const sampleId = record[headerMap.sampleId] || '';
   const stageGuess = sampleId.toLowerCase().includes('prlib') ? 'final_library' : 'post_library';
 
-  const shortPercent = toNumber(record['short_percent']) ?? 0;
+  const shortPercent = toNumber(record.short_percent) ?? 0;
   const normalized = {
     sample_id: sampleId,
     project_id: sampleId.includes(':') ? sampleId.split(':')[0] : '',
@@ -145,11 +168,17 @@ const normalizeFemtoRecord = (record, defaultDate, headerMap) => {
     date_analyzed: defaultDate,
     percent_0_1000_bp: Math.min(100, Math.max(0, Number(shortPercent.toFixed(3)))),
     avg_fragment_size_bp: toNumber(record[headerMap.avgSize]),
-    peak_size_bp: toNumber(record['dominant_peak_size_bp']),
+    peak_size_bp: toNumber(record.dominant_peak_size_bp),
     concentration_ng_ul: toNumber(record[headerMap.tic]),
     library_molarity_nM: toNumber(record[headerMap.tim]),
     total_dna_ng: undefined,
-    notes: 'Auto-mapped from Femto output CSV.'
+    notes: 'Auto-mapped from Femto output CSV.',
+    dominant_peak_size_bp: toNumber(record.dominant_peak_size_bp),
+    dominant_peak_percent: toNumber(record.dominant_percent),
+    detected_short_peak_count: record.detected_short_peak_count || 0,
+    invalid_percent_peak_rows: record.invalid_percent_peak_rows || 0,
+    percent_0_1000_bp_source: record.percent_0_1000_bp_source,
+    triage_warnings: buildTraceWarnings(record)
   };
 
   numericFields.forEach((field) => {
@@ -164,7 +193,8 @@ const aggregateFemtoRows = (rows, headerMap) => {
   const stats = {
     peakRows: 0,
     blankSummaryRows: 0,
-    invalidPercentRows: 0
+    invalidPercentRows: 0,
+    inferredZeroShortPercentSamples: 0
   };
 
   rows.forEach((row) => {
@@ -177,7 +207,11 @@ const aggregateFemtoRows = (rows, headerMap) => {
         ...row,
         short_percent: 0,
         dominant_percent: -1,
-        dominant_peak_size_bp: undefined
+        dominant_peak_size_bp: undefined,
+        detected_short_peak_count: 0,
+        quantified_peak_count: 0,
+        invalid_percent_peak_rows: 0,
+        percent_0_1000_bp_source: 'sum_small_peaks'
       });
     }
 
@@ -185,27 +219,56 @@ const aggregateFemtoRows = (rows, headerMap) => {
     const sizeBp = toNumber(row[headerMap.sizeBp]);
     const peakId = toNumber(row[headerMap.peakId]);
     const peakPercent = toNumber(row[headerMap.concPercent]);
+    const isPeakRow = peakId !== undefined;
 
-    if (peakId !== undefined) stats.peakRows += 1;
+    if (isPeakRow) stats.peakRows += 1;
     if (peakId === undefined && row[headerMap.concPercent] === '') stats.blankSummaryRows += 1;
-    if (row[headerMap.concPercent] && peakPercent === undefined) stats.invalidPercentRows += 1;
-
-    if (sizeBp !== undefined && sizeBp <= 1000 && peakPercent !== undefined) {
-      agg.short_percent += peakPercent;
+    if (isPeakRow && row[headerMap.concPercent] && peakPercent === undefined) {
+      stats.invalidPercentRows += 1;
+      agg.invalid_percent_peak_rows += 1;
     }
 
-    if (peakPercent !== undefined && peakPercent > agg.dominant_percent) {
+    if (isPeakRow && peakPercent !== undefined) {
+      agg.quantified_peak_count += 1;
+    }
+
+    if (isPeakRow && sizeBp !== undefined && sizeBp <= 1000 && peakPercent !== undefined) {
+      agg.short_percent += peakPercent;
+      agg.detected_short_peak_count += 1;
+    }
+
+    if (isPeakRow && peakPercent !== undefined && peakPercent > agg.dominant_percent) {
       agg.dominant_percent = peakPercent;
       agg.dominant_peak_size_bp = sizeBp;
     }
 
-    [headerMap.avgSize, headerMap.tic, headerMap.tim].forEach((field) => {
+    if (headerMap.avgSize) {
+      const currentAvg = toNumber(agg[headerMap.avgSize]);
+      const nextAvg = toNumber(row[headerMap.avgSize]);
+      if (nextAvg !== undefined && (currentAvg === undefined || nextAvg > currentAvg)) {
+        agg[headerMap.avgSize] = row[headerMap.avgSize];
+      }
+    }
+
+    [headerMap.tic, headerMap.tim].forEach((field) => {
       if (field && (!agg[field] || agg[field] === '') && row[field]) agg[field] = row[field];
     });
   });
 
+  const aggregatedRows = [...bySample.values()].map((agg) => {
+    if (agg.detected_short_peak_count === 0) {
+      if (agg.quantified_peak_count > 0 && (agg.dominant_peak_size_bp || 0) > 1000) {
+        agg.percent_0_1000_bp_source = 'inferred_no_small_peak';
+        stats.inferredZeroShortPercentSamples += 1;
+      } else if (agg.quantified_peak_count === 0) {
+        agg.percent_0_1000_bp_source = 'fallback_zero_no_quantified_peaks';
+      }
+    }
+    return agg;
+  });
+
   return {
-    rows: [...bySample.values()],
+    rows: aggregatedRows,
     stats
   };
 };
