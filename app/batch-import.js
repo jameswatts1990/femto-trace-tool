@@ -7,7 +7,42 @@ const numericFields = [
   'total_dna_ng'
 ];
 
-const normalizeHeader = (header) => header.trim().toLowerCase();
+const normalizeHeader = (header) => header.replace(/^\uFEFF/, '').trim().toLowerCase();
+
+const normalizeToken = (value) => normalizeHeader(value).replace(/[^a-z0-9]+/g, '');
+
+const headerAliases = {
+  well: ['well'],
+  sampleId: ['sample id', 'sampleid'],
+  sizeBp: ['size (bp)', 'sizebp'],
+  peakId: ['peak id', 'peakid'],
+  concPercent: ['% (conc.) (ng/ul)', '% (conc.) (ng/uL)', '% (conc.)', 'concpercent'],
+  avgSize: ['avg. size', 'avg size', 'avgsize'],
+  tic: ['tic (ng/ul)', 'tic ng/ul', 'tic(ng/ul)'],
+  tim: ['tim (nmole/l)', 'tim (nmol/l)', 'tim (nmole/liter)', 'tim nmole/l']
+};
+
+const resolveHeaderMap = (headers) => {
+  const tokenToHeader = new Map(headers.map((header) => [normalizeToken(header), header]));
+  const lookup = (aliasList) => {
+    for (const alias of aliasList) {
+      const found = tokenToHeader.get(normalizeToken(alias));
+      if (found) return found;
+    }
+    return undefined;
+  };
+
+  return {
+    well: lookup(headerAliases.well),
+    sampleId: lookup(headerAliases.sampleId),
+    sizeBp: lookup(headerAliases.sizeBp),
+    peakId: lookup(headerAliases.peakId),
+    concPercent: lookup(headerAliases.concPercent),
+    avgSize: lookup(headerAliases.avgSize),
+    tic: lookup(headerAliases.tic),
+    tim: lookup(headerAliases.tim)
+  };
+};
 
 const parseDelimited = (text) => {
   const trimmed = text.trim();
@@ -87,32 +122,32 @@ const normalizeTemplateRecord = (record) => {
 };
 
 const isFemtoExport = (headers) => {
-  const normalized = headers.map(normalizeHeader);
-  return normalized.includes('well')
-    && normalized.includes('sample id')
-    && normalized.includes('size (bp)')
-    && normalized.some((h) => h.startsWith('% (conc.)'))
-    && normalized.includes('avg. size')
-    && normalized.includes('tic (ng/ul)')
-    && normalized.some((h) => h.startsWith('tim (nmole/'));
+  const mapped = resolveHeaderMap(headers);
+  return Boolean(mapped.well
+    && mapped.sampleId
+    && mapped.sizeBp
+    && mapped.concPercent
+    && mapped.avgSize
+    && mapped.tic
+    && mapped.tim);
 };
 
-const normalizeFemtoRecord = (record, defaultDate) => {
-  const sampleId = record['Sample ID'] || '';
+const normalizeFemtoRecord = (record, defaultDate, headerMap) => {
+  const sampleId = record[headerMap.sampleId] || '';
   const stageGuess = sampleId.toLowerCase().includes('prlib') ? 'final_library' : 'post_library';
 
   const shortPercent = toNumber(record['short_percent']) ?? 0;
   const normalized = {
     sample_id: sampleId,
     project_id: sampleId.includes(':') ? sampleId.split(':')[0] : '',
-    batch_id: record['Well'] || '',
+    batch_id: record[headerMap.well] || '',
     stage: stageGuess,
     date_analyzed: defaultDate,
     percent_0_1000_bp: Math.min(100, Math.max(0, Number(shortPercent.toFixed(3)))),
-    avg_fragment_size_bp: toNumber(record['Avg. Size']),
+    avg_fragment_size_bp: toNumber(record[headerMap.avgSize]),
     peak_size_bp: toNumber(record['dominant_peak_size_bp']),
-    concentration_ng_ul: toNumber(record['TIC (ng/ul)']),
-    library_molarity_nM: toNumber(record['TIM (nmole/L)']),
+    concentration_ng_ul: toNumber(record[headerMap.tic]),
+    library_molarity_nM: toNumber(record[headerMap.tim]),
     total_dna_ng: undefined,
     notes: 'Auto-mapped from Femto output CSV.'
   };
@@ -124,14 +159,19 @@ const normalizeFemtoRecord = (record, defaultDate) => {
   return normalized;
 };
 
-const aggregateFemtoRows = (rows) => {
+const aggregateFemtoRows = (rows, headerMap) => {
   const bySample = new Map();
+  const stats = {
+    peakRows: 0,
+    blankSummaryRows: 0,
+    invalidPercentRows: 0
+  };
 
   rows.forEach((row) => {
-    const sampleId = row['Sample ID'];
+    const sampleId = row[headerMap.sampleId];
     if (!sampleId) return;
 
-    const key = `${row['Well'] || ''}::${sampleId}`;
+    const key = `${row[headerMap.well] || ''}::${sampleId}`;
     if (!bySample.has(key)) {
       bySample.set(key, {
         ...row,
@@ -142,8 +182,13 @@ const aggregateFemtoRows = (rows) => {
     }
 
     const agg = bySample.get(key);
-    const sizeBp = toNumber(row['Size (bp)']);
-    const peakPercent = toNumber(row['% (Conc.) (ng/uL)'] ?? row['% (Conc.)']);
+    const sizeBp = toNumber(row[headerMap.sizeBp]);
+    const peakId = toNumber(row[headerMap.peakId]);
+    const peakPercent = toNumber(row[headerMap.concPercent]);
+
+    if (peakId !== undefined) stats.peakRows += 1;
+    if (peakId === undefined && row[headerMap.concPercent] === '') stats.blankSummaryRows += 1;
+    if (row[headerMap.concPercent] && peakPercent === undefined) stats.invalidPercentRows += 1;
 
     if (sizeBp !== undefined && sizeBp <= 1000 && peakPercent !== undefined) {
       agg.short_percent += peakPercent;
@@ -154,12 +199,15 @@ const aggregateFemtoRows = (rows) => {
       agg.dominant_peak_size_bp = sizeBp;
     }
 
-    ['Avg. Size', 'TIC (ng/ul)', 'TIM (nmole/L)', 'TIM (nmole/l)'].forEach((field) => {
-      if ((!agg[field] || agg[field] === '') && row[field]) agg[field] = row[field];
+    [headerMap.avgSize, headerMap.tic, headerMap.tim].forEach((field) => {
+      if (field && (!agg[field] || agg[field] === '') && row[field]) agg[field] = row[field];
     });
   });
 
-  return [...bySample.values()];
+  return {
+    rows: [...bySample.values()],
+    stats
+  };
 };
 
 export const parseBatchRows = (text) => {
@@ -168,11 +216,17 @@ export const parseBatchRows = (text) => {
 
   const headers = Object.keys(rows[0]);
   if (isFemtoExport(headers)) {
-    const aggregated = aggregateFemtoRows(rows);
+    const headerMap = resolveHeaderMap(headers);
+    const aggregated = aggregateFemtoRows(rows, headerMap);
     const defaultDate = new Date().toISOString().slice(0, 10);
     return {
-      rows: aggregated.map((row) => normalizeFemtoRecord(row, defaultDate)),
-      format: 'femto_export'
+      rows: aggregated.rows.map((row) => normalizeFemtoRecord(row, defaultDate, headerMap)),
+      format: 'femto_export',
+      metadata: {
+        sourceRows: rows.length,
+        sampleCount: aggregated.rows.length,
+        ...aggregated.stats
+      }
     };
   }
 

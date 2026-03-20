@@ -33,6 +33,8 @@ For each record, the triage engine returns:
 - the native template columns (`data/template.csv`), or
 - Femto output exports with columns like `Well`, `Sample ID`, `Size (bp)`, `% (Conc.)`, `Avg. Size`, `TIC (ng/ul)`, `TIM (nmole/L)`.
 
+When Femto exports are uploaded, the parser accepts common header variants (for example `% (Conc.)`, `% (Conc.) (ng/uL)`, and case variations in `TIM (nmole/L)`), handles tab-delimited exports copied from spreadsheets, and ignores blank per-sample summary lines while retaining their TIC/TIM values.
+
 When Femto exports are uploaded, the app aggregates peak rows per sample and computes triage inputs using these factors:
 
 - `percent_0_1000_bp`: sum of `% (Conc.)` values where `Size (bp) <= 1000`

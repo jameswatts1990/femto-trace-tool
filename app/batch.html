@@ -304,7 +304,11 @@
       }
 
       if (parsed.format === 'femto_export') {
-        document.getElementById('batchStatus').textContent = `Detected Femto export format. Auto-mapped ${records.length} samples with computed % 0-1000 bp for triage.`;
+        const metadata = parsed.metadata || {};
+        const invalidNote = metadata.invalidPercentRows
+          ? ` ${metadata.invalidPercentRows} peak row(s) had non-numeric % values and were skipped in % 0-1000 bp calculations.`
+          : '';
+        document.getElementById('batchStatus').textContent = `Detected Femto export format. Auto-mapped ${records.length} samples from ${metadata.sourceRows || records.length} rows (${metadata.peakRows || 0} peak rows, ${metadata.blankSummaryRows || 0} summary rows) with computed % 0-1000 bp for triage.${invalidNote}`;
       } else {
         document.getElementById('batchStatus').textContent = `Loaded ${records.length} records from template-compatible CSV.`;
       }
